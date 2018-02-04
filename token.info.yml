@@ -1,5 +1,5 @@
 name: Token
 type: module
-description: My custom module
+description: replace the string with token.
 core: 1.x
 package: Hunter
