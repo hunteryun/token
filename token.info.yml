@@ -1,0 +1,5 @@
+name: Token
+type: module
+description: My custom module
+core: 1.x
+package: Hunter

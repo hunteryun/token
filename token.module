@@ -1,0 +1,79 @@
+<?php
+/**
+ * Replaces all tokens in a given string with appropriate values.
+ */
+function token_replace($text, array $data = array(), array $options = array()) {
+  $text_tokens = token_scan($text);
+  if (empty($text_tokens)) {
+    return $text;
+  }
+
+  $replacements = array();
+  foreach ($text_tokens as $type => $tokens) {
+    $replacements += token_generate($type, $tokens, $data, $options);
+    if (!empty($options['clear'])) {
+      $replacements += array_fill_keys($tokens, '');
+    }
+  }
+
+  // Optionally alter the list of replacement values.
+  if (!empty($options['callback']) && function_exists($options['callback'])) {
+    $function = $options['callback'];
+    $function($replacements, $data, $options);
+  }
+
+  $tokens = array_keys($replacements);
+  $values = array_values($replacements);
+
+  return str_replace($tokens, $values, $text);
+}
+
+/**
+ * Builds a list of all token-like patterns that appear in the text.
+ */
+function token_scan($text) {
+  // Matches tokens with the following pattern: [$type:$name]
+  // $type and $name may not contain  [ ] characters.
+  // $type may not contain : or whitespace characters, but $name may.
+  preg_match_all('/
+    \[             # [ - pattern start
+    ([^\s\[\].]*)  # match $type not containing whitespace : [ or ]
+    .              # . - separator
+    ([^\[\]]*)     # match $name not containing [ or ]
+    \]             # ] - pattern end
+    /x', $text, $matches);
+
+  $types = $matches[1];
+  $tokens = $matches[2];
+
+  // Iterate through the matches, building an associative array containing
+  // $tokens grouped by $types, pointing to the version of the token found in
+  // the source text. For example, $results['node']['title'] = '[node:title]';
+  $results = array();
+  for ($i = 0; $i < count($tokens); $i++) {
+    $results[$types[$i]][$tokens[$i]] = $matches[0][$i];
+  }
+
+  return $results;
+}
+
+/**
+ * Generates replacement values for a list of tokens.
+ */
+function token_generate($type, array $tokens, array $data = array(), array $options = array()) {
+  global $app;
+  $options += array('sanitize' => TRUE);
+  $replacements = $app->getModuleHandle()->invokeAll('tokens', [$type, $tokens, $data, $options]);
+
+  // Allow other modules to alter the replacements.
+  $context = array(
+    'type' => $type,
+    'tokens' => $tokens,
+    'data' => $data,
+    'options' => $options,
+  );
+
+  $app->getModuleHandle()->alter('tokens', $replacements, $context);
+
+  return $replacements;
+}
